@@ -2,6 +2,7 @@ import discord
 from discord.commands import slash_command, Option
 from discord.ext import commands
 import yt_dlp
+import asyncio
 
 # Configurations for yt-dlp to extract the stream link safely
 YTDL_OPTIONS = {
@@ -31,7 +32,7 @@ class Music(commands.Cog):
         await ctx.defer()
 
         # 2. Safety Check: Verify if the user is currently inside a Voice Channel
-        if not ctx.author.voice:
+        if not getattr(ctx.author, "voice", None):
             return await ctx.respond("❌ You must be inside a voice channel to use this command!")
 
         user_voice_channel = ctx.author.voice.channel
@@ -45,8 +46,10 @@ class Music(commands.Cog):
         # 4. Extract the direct audio stream from the link using yt-dlp
         with yt_dlp.YoutubeDL(YTDL_OPTIONS) as ydl:
             try:
-                # Extract metadata without downloading the actual file to your machine
-                info = ydl.extract_info(url, download=False)
+                # Extract metadata without downloading the actual file to your machine.
+                # We use a background thread to prevent the synchronous yt-dlp library from freezing the bot.
+                loop = asyncio.get_event_loop()
+                info = await loop.run_in_executor(None, lambda: ydl.extract_info(url, download=False))
                 stream_url = info['url']
                 title = info.get('title', 'Unknown Title')
             except Exception as e:
