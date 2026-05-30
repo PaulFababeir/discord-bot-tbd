@@ -1,5 +1,5 @@
 import discord
-from discord.commands import slash_command, Option
+from discord.commands import slash_command, option
 from discord.ext import commands
 import yt_dlp
 import asyncio
@@ -23,10 +23,11 @@ class Music(commands.Cog):
         self.bot = bot
 
     @slash_command(description="Plays audio directly from a provided YouTube or web link.")
+    @option("url", str, description="Paste the direct music link here (e.g., YouTube URL)", required=True)
     async def play_link(
         self, 
         ctx: discord.ApplicationContext, 
-        url: Option(str, "Paste the direct music link here (e.g., YouTube URL)", required=True)
+        url: str
     ):
         # 1. Defer the response because pulling metadata from YouTube takes 1–3 seconds
         await ctx.defer()
