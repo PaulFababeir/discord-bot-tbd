@@ -1,6 +1,6 @@
 import discord
 from discord.commands import slash_command, option
-from discord.ext import commands
+from discord.ext import commands, pages
 import yt_dlp
 import asyncio
 
@@ -94,6 +94,7 @@ class Music(commands.Cog):
                 info = await loop.run_in_executor(None, lambda: ydl.extract_info(url, download=False))
                 stream_url = info['url']
                 title = info.get('title', 'Unknown Title')
+                thumbnail = info.get('thumbnail')
             except Exception as e:
                 return await ctx.respond(f"[❌] Failed to extract audio stream from that link. Error: {e}")
 
@@ -103,8 +104,8 @@ class Music(commands.Cog):
             if ctx.guild.id not in self.queues:
                 self.queues[ctx.guild.id] = []
             
-            # Add the URL and Title to the queue
-            self.queues[ctx.guild.id].append({'url': url, 'title': title})
+            # Add the URL, Title, and Thumbnail to the queue
+            self.queues[ctx.guild.id].append({'url': url, 'title': title, 'thumbnail': thumbnail})
             return await ctx.respond(f"✅ Added to queue: **{title}**")
 
         # 6. Stream the raw audio directly into the voice channel using FFmpeg
@@ -121,8 +122,35 @@ class Music(commands.Cog):
         if ctx.guild.id not in self.queues or not self.queues[ctx.guild.id]:
             return await ctx.respond("[⚠️] The queue is currently empty.")
             
-        queue_list = "\n".join([f"{i+1}. {song['title']}" for i, song in enumerate(self.queues[ctx.guild.id])])
-        await ctx.respond(f"**Current Queue:**\n{queue_list}")
+        queue_list = self.queues[ctx.guild.id]
+        embeds = []
+        chunk_size = 10 # Display 5 songs per page
+        
+        for i in range(0, len(queue_list), chunk_size):
+            chunk = queue_list[i:i+chunk_size]
+            embed = discord.Embed(
+                title="🎶 Current Music Queue",
+                color=discord.Color.blue()
+            )
+            
+            description = ""
+            for j, song in enumerate(chunk):
+                description += f"**{i + j + 1}.** [{song['title']}]({song['url']})\n\n"
+                
+            embed.description = description
+            
+            # Set the thumbnail to the first song in this page's chunk
+            if chunk[0].get('thumbnail'):
+                embed.set_thumbnail(url=chunk[0]['thumbnail'])
+                
+            embeds.append(embed)
+            
+        # If there's only 1 page, just send the embed on its own
+        if len(embeds) == 1:
+            await ctx.respond(embed=embeds[0])
+        else:
+            paginator = pages.Paginator(pages=embeds, show_disabled=True, show_indicator=True)
+            await paginator.respond(ctx.interaction)
 
     # DISCONNECT COMMAND
     @slash_command(description="Disconnects the bot from the voice channel.")
