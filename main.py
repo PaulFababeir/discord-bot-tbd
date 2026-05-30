@@ -3,7 +3,10 @@ import os # default module
 from dotenv import load_dotenv
 
 load_dotenv() # load all the variables from the env file
-bot = discord.Bot()
+
+# Load the testing guild ID from the .env file
+guild_id = os.getenv('GUILD_ID')
+bot = discord.Bot(debug_guilds=[int(guild_id)] if guild_id else None)
 
 # List of cogs to load
 cogs_list = [
