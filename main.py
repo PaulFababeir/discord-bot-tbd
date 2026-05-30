@@ -8,6 +8,7 @@ bot = discord.Bot()
 # List of cogs to load
 cogs_list = [
     'cogs.general',
+    'cogs.info',
 ]
 
 for cog in cogs_list:
