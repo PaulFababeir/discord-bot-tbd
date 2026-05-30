@@ -3,6 +3,78 @@ from discord.commands import slash_command, option
 from discord.ext import commands, pages
 import yt_dlp
 import asyncio
+import time
+
+def create_progress_bar(current_sec, total_sec, length=20):
+    """Generates a text-based progress bar."""
+    if not total_sec:
+        return "🔘" + "▬" * (length - 1) + " `Live / Unknown Duration`"
+    
+    progress = int(length * current_sec / total_sec)
+    progress = max(0, min(length - 1, progress)) # Keep index in bounds
+    
+    bar = "▬" * progress + "🔘" + "▬" * (length - progress - 1)
+    
+    curr_str = time.strftime('%H:%M:%S' if total_sec >= 3600 else '%M:%S', time.gmtime(current_sec))
+    tot_str = time.strftime('%H:%M:%S' if total_sec >= 3600 else '%M:%S', time.gmtime(total_sec))
+    
+    return f"{bar} `{curr_str} / {tot_str}`"
+
+class MusicController(discord.ui.View):
+    """Interactive buttons attached to the 'Now Playing' message."""
+    def __init__(self, cog, ctx):
+        super().__init__(timeout=None)
+        self.cog = cog
+        self.ctx = ctx
+
+    def get_progress_embed(self):
+        guild_id = self.ctx.guild.id
+        track = self.cog.current_track.get(guild_id)
+        if not track:
+            return discord.Embed(description="No track is currently playing.", color=discord.Color.red())
+        
+        # Calculate current time based on whether it is actively playing or paused
+        if track['is_paused']:
+            current_time = track['accumulated_time']
+        else:
+            current_time = track['accumulated_time'] + (time.time() - track['start_time'])
+        
+        bar = create_progress_bar(current_time, track['duration'])
+        
+        embed = discord.Embed(
+            title=f"🎶 Now Playing: {track['title']}",
+            url=track['url'],
+            color=discord.Color.blue()
+        )
+        embed.description = bar
+        if track['thumbnail']:
+            embed.set_image(url=track['thumbnail'])
+        return embed
+
+    @discord.ui.button(label="Pause / Resume", style=discord.ButtonStyle.primary, emoji="⏯️")
+    async def toggle_pause(self, button: discord.ui.Button, interaction: discord.Interaction):
+        vc = self.ctx.voice_client
+        if not vc: return await interaction.response.send_message("Not connected to a voice channel.", ephemeral=True)
+        
+        # Triggers your cog's existing commands via the view!
+        if vc.is_playing():
+            await self.cog.pause(self.ctx)
+        elif vc.is_paused():
+            await self.cog.resume(self.ctx)
+        await interaction.response.edit_message(embed=self.get_progress_embed())
+
+    @discord.ui.button(label="Skip", style=discord.ButtonStyle.danger, emoji="⏭️")
+    async def skip_track(self, button: discord.ui.Button, interaction: discord.Interaction):
+        await self.cog.skip(self.ctx)
+        for child in self.children: child.disabled = True
+        await interaction.response.edit_message(view=self)
+
+    @discord.ui.button(label="Refresh", style=discord.ButtonStyle.secondary, emoji="🔄")
+    async def refresh(self, button: discord.ui.Button, interaction: discord.Interaction):
+        if not self.ctx.voice_client or (not self.ctx.voice_client.is_playing() and not self.ctx.voice_client.is_paused()):
+            for child in self.children: child.disabled = True
+            return await interaction.response.edit_message(content="**Track ended.**", embed=self.get_progress_embed(), view=self)
+        await interaction.response.edit_message(embed=self.get_progress_embed())
 
 # Configurations for yt-dlp to extract the stream link safely
 YTDL_OPTIONS = {
@@ -22,6 +94,7 @@ class Music(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.queues = {} # Maps guild IDs to a list of queued songs
+        self.current_track = {} # Maps guild IDs to current track info
 
     # CLEAR VC STATE
     @commands.Cog.listener()
@@ -53,14 +126,26 @@ class Music(commands.Cog):
             info = await loop.run_in_executor(None, lambda: ydl.extract_info(original_url, download=False))
             stream_url = info['url']
             title = info.get('title', 'Unknown Title')
+            duration = info.get('duration', 0)
+            thumbnail = info.get('thumbnail')
 
         audio_source = discord.FFmpegPCMAudio(stream_url, **FFMPEG_OPTIONS)
+        
+        self.current_track[ctx.guild.id] = {
+            'title': title,
+            'url': original_url,
+            'duration': duration,
+            'thumbnail': thumbnail,
+            'start_time': time.time(),
+            'is_paused': False,
+            'accumulated_time': 0
+        }
         
         # Pass check_queue back into 'after' to keep the loop going!
         vc.play(audio_source, after=lambda e: self.check_queue(ctx))
         
-        # Use ctx.send (instead of ctx.respond) because the initial interaction is already over
-        await ctx.send(f"🎶 Now Streaming from Queue: **{title}**")
+        view = MusicController(self, ctx)
+        await ctx.send(embed=view.get_progress_embed(), view=view)
 
     # PLAY COMMAND
     @slash_command(description="Plays audio directly from a provided YouTube or web link.")
@@ -94,6 +179,7 @@ class Music(commands.Cog):
                 info = await loop.run_in_executor(None, lambda: ydl.extract_info(url, download=False))
                 stream_url = info['url']
                 title = info.get('title', 'Unknown Title')
+                duration = info.get('duration', 0)
                 thumbnail = info.get('thumbnail')
             except Exception as e:
                 return await ctx.respond(f"[❌] Failed to extract audio stream from that link. Error: {e}")
@@ -111,10 +197,21 @@ class Music(commands.Cog):
         # 6. Stream the raw audio directly into the voice channel using FFmpeg
         audio_source = discord.FFmpegPCMAudio(stream_url, **FFMPEG_OPTIONS)
         
+        self.current_track[ctx.guild.id] = {
+            'title': title,
+            'url': url,
+            'duration': duration,
+            'thumbnail': thumbnail,
+            'start_time': time.time(),
+            'is_paused': False,
+            'accumulated_time': 0
+        }
+        
         # IMPORTANT: Add the after callback here!
         vc.play(audio_source, after=lambda e: self.check_queue(ctx))
 
-        await ctx.respond(f"🎶 Now Streaming: **{title}**")
+        view = MusicController(self, ctx)
+        await ctx.respond(embed=view.get_progress_embed(), view=view)
 
     # QUEUE COMMAND
     @slash_command(description="Displays the current music queue.")
@@ -175,6 +272,10 @@ class Music(commands.Cog):
         
         if vc.is_playing():
             vc.pause()
+            track = self.current_track.get(ctx.guild.id)
+            if track:
+                track['accumulated_time'] += time.time() - track['start_time']
+                track['is_paused'] = True
             await ctx.respond("[⏸️] Paused the current track.")
         else:
             await ctx.respond("[⚠️] No audio is currently playing.")
@@ -189,6 +290,10 @@ class Music(commands.Cog):
         
         if vc.is_paused():
             vc.resume()
+            track = self.current_track.get(ctx.guild.id)
+            if track:
+                track['start_time'] = time.time()
+                track['is_paused'] = False
             await ctx.respond("[▶️] Resumed the track.")
         else:
             await ctx.respond("[⚠️] The audio is not paused.")
@@ -221,6 +326,16 @@ class Music(commands.Cog):
             
         removed_song = queue_list.pop(index - 1)
         await ctx.respond(f"🗑️ Removed from queue: **{removed_song['title']}**")
+
+    # NOW PLAYING COMMAND
+    @slash_command(description="Displays the currently playing song and its progress.")
+    async def nowplaying(self, ctx: discord.ApplicationContext):
+        vc = ctx.voice_client
+        if not vc or not (vc.is_playing() or vc.is_paused()):
+            return await ctx.respond("[⚠️] No audio is currently playing.")
+            
+        view = MusicController(self, ctx)
+        await ctx.respond(embed=view.get_progress_embed(), view=view)
 
 def setup(bot):
     bot.add_cog(Music(bot))
