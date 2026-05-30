@@ -5,6 +5,21 @@ import yt_dlp
 import asyncio
 import time
 
+# Configurations for yt-dlp to extract the stream link safely
+YTDL_OPTIONS = {
+    'format': 'bestaudio/best',
+    'noplaylist': True,
+    'quiet': True,
+    'no_warnings': True,
+    'source_address': '0.0.0.0' # Forces IPv4 to prevent connection timeouts
+}
+
+# Advanced FFmpeg arguments that ensure a smooth network stream
+FFMPEG_OPTIONS = {
+    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
+    'options': '-vn' # Processes audio only, ignoring the heavy video channel
+}
+
 def create_progress_bar(current_sec, total_sec, length=20):
     """Generates a text-based progress bar."""
     if not total_sec:
@@ -75,21 +90,6 @@ class MusicController(discord.ui.View):
             for child in self.children: child.disabled = True
             return await interaction.response.edit_message(content="**Track ended.**", embed=self.get_progress_embed(), view=self)
         await interaction.response.edit_message(embed=self.get_progress_embed())
-
-# Configurations for yt-dlp to extract the stream link safely
-YTDL_OPTIONS = {
-    'format': 'bestaudio/best',
-    'noplaylist': True,
-    'quiet': True,
-    'no_warnings': True,
-    'source_address': '0.0.0.0' # Forces IPv4 to prevent connection timeouts
-}
-
-# Advanced FFmpeg arguments that ensure a smooth network stream
-FFMPEG_OPTIONS = {
-    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
-    'options': '-vn' # Processes audio only, ignoring the heavy video channel
-}
 
 class Music(commands.Cog):
     def __init__(self, bot):
