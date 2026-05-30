@@ -1,11 +1,12 @@
 import discord
+from discord.commands import slash_command
 from discord.ext import commands
 
 class Info(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @discord.slash_command(name="info", description="Displays information about the bot")
+    @slash_command(name="info", description="Displays information about the bot")
     async def info(self, ctx: discord.ApplicationContext):
         embed = discord.Embed(
             title="Bot Information",
