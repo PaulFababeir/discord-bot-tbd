@@ -165,5 +165,19 @@ class Music(commands.Cog):
         else:
             await ctx.respond("[⚠️] The audio is not paused.")
 
+    # SKIP COMMAND
+    @slash_command(description="Skips the currently playing song.")
+    async def skip(self, ctx: discord.ApplicationContext):
+        vc = ctx.voice_client
+
+        if not vc:
+            return await ctx.respond("[❌] I am not connected to a voice channel.")
+        
+        if vc.is_playing() or vc.is_paused():
+            vc.stop() # This automatically triggers the 'after' callback to play the next song!
+            await ctx.respond("[⏭️] Skipped the current track.")
+        else:
+            await ctx.respond("[⚠️] No audio is currently playing to skip.")
+
 def setup(bot):
     bot.add_cog(Music(bot))
