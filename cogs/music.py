@@ -67,7 +67,7 @@ class Music(commands.Cog):
         await ctx.respond(f"🎶 Now Streaming: **{title}**")
 
     @slash_command(description="Disconnects the bot from the voice channel.")
-    async def leave(self, ctx: discord.ApplicationContext):
+    async def disconnect(self, ctx: discord.ApplicationContext):
         if ctx.voice_client:
             await ctx.voice_client.disconnect()
             await ctx.respond("👋 Left the voice channel.")

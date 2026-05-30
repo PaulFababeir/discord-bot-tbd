@@ -1,15 +1,16 @@
 import discord
+from discord.commands import slash_command
 from discord.ext import commands
 
 class General(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @discord.slash_command(name="hello", description="Say hello to the bot")
+    @slash_command(name="hello", description="Say hello to the bot")
     async def hello(self, ctx: discord.ApplicationContext):
         await ctx.respond(f"Hey!")
 
-    @discord.slash_command(name="hi", description="Say hi to the bot")
+    @slash_command(name="hi", description="Say hi to the bot")
     async def hi(self, ctx: discord.ApplicationContext):
         await ctx.respond(f"Ho!")    
 
