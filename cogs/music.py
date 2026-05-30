@@ -22,13 +22,14 @@ class Music(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    # CLEAR VC STATE
     @commands.Cog.listener()
     async def on_ready(self):
-        # Automatically clear any stuck voice connections when the bot restarts
         for guild in self.bot.guilds:
             if guild.me.voice:
                 await guild.me.edit(voice_channel=None)
 
+    # PLAY COMMAND
     @slash_command(description="Plays audio directly from a provided YouTube or web link.")
     @option("url", str, description="Paste the direct music link here (e.g., YouTube URL)", required=True)
     async def play(
@@ -73,6 +74,7 @@ class Music(commands.Cog):
 
         await ctx.respond(f"🎶 Now Streaming: **{title}**")
 
+    # DISCONNECT COMMAND
     @slash_command(description="Disconnects the bot from the voice channel.")
     async def disconnect(self, ctx: discord.ApplicationContext):
         if ctx.voice_client:
