@@ -207,5 +207,20 @@ class Music(commands.Cog):
         else:
             await ctx.respond("[⚠️] No audio is currently playing to skip.")
 
+    # REMOVE COMMAND
+    @slash_command(description="Removes a specific song from the queue.")
+    @option("index", int, description="The queue number of the song to remove", required=True)
+    async def remove(self, ctx: discord.ApplicationContext, index: int):
+        if ctx.guild.id not in self.queues or not self.queues[ctx.guild.id]:
+            return await ctx.respond("[⚠️] The queue is currently empty.")
+            
+        queue_list = self.queues[ctx.guild.id]
+        
+        if index < 1 or index > len(queue_list):
+            return await ctx.respond(f"[❌] Invalid number! Please provide a number between 1 and {len(queue_list)}.")
+            
+        removed_song = queue_list.pop(index - 1)
+        await ctx.respond(f"🗑️ Removed from queue: **{removed_song['title']}**")
+
 def setup(bot):
     bot.add_cog(Music(bot))
