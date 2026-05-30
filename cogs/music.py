@@ -22,9 +22,16 @@ class Music(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    @commands.Cog.listener()
+    async def on_ready(self):
+        # Automatically clear any stuck voice connections when the bot restarts
+        for guild in self.bot.guilds:
+            if guild.me.voice:
+                await guild.me.edit(voice_channel=None)
+
     @slash_command(description="Plays audio directly from a provided YouTube or web link.")
     @option("url", str, description="Paste the direct music link here (e.g., YouTube URL)", required=True)
-    async def play_link(
+    async def play(
         self, 
         ctx: discord.ApplicationContext, 
         url: str
@@ -34,7 +41,7 @@ class Music(commands.Cog):
 
         # 2. Safety Check: Verify if the user is currently inside a Voice Channel
         if not getattr(ctx.author, "voice", None):
-            return await ctx.respond("❌ You must be inside a voice channel to use this command!")
+            return await ctx.respond("[❌] You must be inside a voice channel to use this command!")
 
         user_voice_channel = ctx.author.voice.channel
 
@@ -54,7 +61,7 @@ class Music(commands.Cog):
                 stream_url = info['url']
                 title = info.get('title', 'Unknown Title')
             except Exception as e:
-                return await ctx.respond(f"❌ Failed to extract audio stream from that link. Error: {e}")
+                return await ctx.respond(f"[❌] Failed to extract audio stream from that link. Error: {e}")
 
         # 5. Stop playback if a song is already running to avoid messy audio overlap
         if vc.is_playing():
@@ -70,9 +77,13 @@ class Music(commands.Cog):
     async def disconnect(self, ctx: discord.ApplicationContext):
         if ctx.voice_client:
             await ctx.voice_client.disconnect()
-            await ctx.respond("👋 Left the voice channel.")
+            await ctx.respond("[👋] Left the voice channel.")
+        elif ctx.guild and ctx.guild.me.voice:
+            # Handles the edge case where the bot lost its local voice state but is physically still in the VC
+            await ctx.guild.me.edit(voice_channel=None)
+            await ctx.respond("[👋] Forcefully left the voice channel after a restart.")
         else:
-            await ctx.respond("❌ I am not connected to any voice channel.")
+            await ctx.respond("[❌] I am not connected to any voice channel.")
 
 def setup(bot):
     bot.add_cog(Music(bot))
