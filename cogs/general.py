@@ -10,8 +10,8 @@ class General(commands.Cog):
         await ctx.respond(f"Hey!")
 
     @discord.slash_command(name="hi", description="Say hi to the bot")
-    async def hello(self, ctx: discord.ApplicationContext):
-        await ctx.respond(f"Hey!")    
+    async def hi(self, ctx: discord.ApplicationContext):
+        await ctx.respond(f"Ho!")    
 
 def setup(bot):
     # This function is required to load the cog into the bot
