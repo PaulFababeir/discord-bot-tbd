@@ -21,6 +21,7 @@ FFMPEG_OPTIONS = {
 class Music(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.queues = {} # Maps guild IDs to a list of queued songs
 
     # CLEAR VC STATE
     @commands.Cog.listener()
@@ -28,6 +29,38 @@ class Music(commands.Cog):
         for guild in self.bot.guilds:
             if guild.me.voice:
                 await guild.me.edit(voice_channel=None)
+
+    def check_queue(self, ctx: discord.ApplicationContext):
+        """Called automatically when a song finishes playing."""
+        if ctx.guild.id in self.queues and len(self.queues[ctx.guild.id]) > 0:
+            # Pop the next song from the queue
+            next_song = self.queues[ctx.guild.id].pop(0)
+            
+            # The 'after' callback is synchronous, so we must schedule 
+            # the async playback onto the bot's event loop
+            coro = self.play_next_song(ctx, next_song['url'])
+            asyncio.run_coroutine_threadsafe(coro, self.bot.loop)
+
+    async def play_next_song(self, ctx: discord.ApplicationContext, original_url: str):
+        """Helper to safely fetch and play the next song in the background."""
+        vc = ctx.voice_client
+        if not vc:
+            return
+
+        # Re-extract the stream to prevent "HTTP 403 Forbidden" expiration errors
+        with yt_dlp.YoutubeDL(YTDL_OPTIONS) as ydl:
+            loop = asyncio.get_event_loop()
+            info = await loop.run_in_executor(None, lambda: ydl.extract_info(original_url, download=False))
+            stream_url = info['url']
+            title = info.get('title', 'Unknown Title')
+
+        audio_source = discord.FFmpegPCMAudio(stream_url, **FFMPEG_OPTIONS)
+        
+        # Pass check_queue back into 'after' to keep the loop going!
+        vc.play(audio_source, after=lambda e: self.check_queue(ctx))
+        
+        # Use ctx.send (instead of ctx.respond) because the initial interaction is already over
+        await ctx.send(f"🎶 Now Streaming from Queue: **{title}**")
 
     # PLAY COMMAND
     @slash_command(description="Plays audio directly from a provided YouTube or web link.")
@@ -64,15 +97,32 @@ class Music(commands.Cog):
             except Exception as e:
                 return await ctx.respond(f"[❌] Failed to extract audio stream from that link. Error: {e}")
 
-        # 5. Stop playback if a song is already running to avoid messy audio overlap
-        if vc.is_playing():
-            vc.stop()
+        # 5. Check if we should queue the song or play it immediately
+        if vc.is_playing() or vc.is_paused():
+            # Initialize the server's queue if it doesn't exist yet
+            if ctx.guild.id not in self.queues:
+                self.queues[ctx.guild.id] = []
+            
+            # Add the URL and Title to the queue
+            self.queues[ctx.guild.id].append({'url': url, 'title': title})
+            return await ctx.respond(f"✅ Added to queue: **{title}**")
 
         # 6. Stream the raw audio directly into the voice channel using FFmpeg
         audio_source = discord.FFmpegPCMAudio(stream_url, **FFMPEG_OPTIONS)
-        vc.play(audio_source)
+        
+        # IMPORTANT: Add the after callback here!
+        vc.play(audio_source, after=lambda e: self.check_queue(ctx))
 
         await ctx.respond(f"🎶 Now Streaming: **{title}**")
+
+    # QUEUE COMMAND
+    @slash_command(description="Displays the current music queue.")
+    async def queue(self, ctx: discord.ApplicationContext):
+        if ctx.guild.id not in self.queues or not self.queues[ctx.guild.id]:
+            return await ctx.respond("[⚠️] The queue is currently empty.")
+            
+        queue_list = "\n".join([f"{i+1}. {song['title']}" for i, song in enumerate(self.queues[ctx.guild.id])])
+        await ctx.respond(f"**Current Queue:**\n{queue_list}")
 
     # DISCONNECT COMMAND
     @slash_command(description="Disconnects the bot from the voice channel.")
