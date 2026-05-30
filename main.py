@@ -12,6 +12,7 @@ bot = discord.Bot(debug_guilds=[int(guild_id)] if guild_id else None)
 cogs_list = [
     'cogs.general',
     'cogs.info',
+    'cogs.music',
 ]
 
 for cog in cogs_list:
