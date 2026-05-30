@@ -86,6 +86,34 @@ class Music(commands.Cog):
             await ctx.respond("[👋] Forcefully left the voice channel after a restart.")
         else:
             await ctx.respond("[❌] I am not connected to any voice channel.")
+    
+    # PAUSE COMMAND
+    @slash_command(description="Pauses the currently playing track.")
+    async def pause(self, ctx: discord.ApplicationContext):
+        vc = ctx.voice_client
+
+        if not vc:
+            return await ctx.respond("[❌] I am not connected to a voice channel.")
+        
+        if vc.is_playing():
+            vc.pause()
+            await ctx.respond("[⏸️] Paused the current track.")
+        else:
+            await ctx.respond("[⚠️] No audio is currently playing.")
+
+    # RESUME COMMAND
+    @slash_command(description="Resumes a paused track.")
+    async def resume(self, ctx: discord.ApplicationContext):
+        vc = ctx.voice_client
+
+        if not vc:
+            return await ctx.respond("[❌] I am not connected to a voice channel.")
+        
+        if vc.is_paused():
+            vc.resume()
+            await ctx.respond("[▶️] Resumed the track.")
+        else:
+            await ctx.respond("[⚠️] The audio is not paused.")
 
 def setup(bot):
     bot.add_cog(Music(bot))
