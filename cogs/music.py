@@ -81,6 +81,7 @@ YTDL_OPTIONS = {
     'format': 'bestaudio/best',
     'noplaylist': True,
     'quiet': True,
+    'no_warnings': True,
     'source_address': '0.0.0.0' # Forces IPv4 to prevent connection timeouts
 }
 
