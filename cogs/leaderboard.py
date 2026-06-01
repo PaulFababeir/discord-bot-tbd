@@ -7,8 +7,8 @@ class Leaderboard(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @slash_command(name="leaderboard", description="Displays the top 10 most played songs globally.")
-    async def leaderboard(self, ctx: discord.ApplicationContext):
+    @slash_command(name="topsongs", description="Displays the top 10 most played songs globally.")
+    async def topsongs(self, ctx: discord.ApplicationContext):
         # Defer since database queries might take a moment
         await ctx.defer()
         
