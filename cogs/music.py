@@ -136,7 +136,8 @@ class Music(commands.Cog):
             duration = info.get('duration', 0)
             thumbnail = info.get('thumbnail')
 
-        audio_source = discord.FFmpegPCMAudio(stream_url, **FFMPEG_OPTIONS)
+        raw_audio = discord.FFmpegPCMAudio(stream_url, **FFMPEG_OPTIONS)
+        audio_source = discord.PCMVolumeTransformer(raw_audio, volume=0.70) # Sets volume to 50%
         
         self.current_track[ctx.guild.id] = {
             'title': title,
@@ -223,7 +224,8 @@ class Music(commands.Cog):
             return await ctx.respond(f"✅ Added to queue: **{title}**")
 
         # 6. Stream the raw audio directly into the voice channel using FFmpeg
-        audio_source = discord.FFmpegPCMAudio(stream_url, **FFMPEG_OPTIONS)
+        raw_audio = discord.FFmpegPCMAudio(stream_url, **FFMPEG_OPTIONS)
+        audio_source = discord.PCMVolumeTransformer(raw_audio, volume=0.70) # Sets volume to 50%
         
         self.current_track[ctx.guild.id] = {
             'title': title,
