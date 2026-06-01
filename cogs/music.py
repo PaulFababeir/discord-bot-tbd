@@ -157,33 +157,32 @@ class Music(commands.Cog):
         await ctx.send(embed=view.get_progress_embed(), view=view)
 
     # PLAY COMMAND
-    @slash_command(description="Plays audio directly from a provided YouTube or web link.")
-    @option("url", str, description="Paste the direct music link here (e.g., YouTube URL)", required=True)
+    @slash_command(description="Plays audio from a search query or a provided web link.")
+    @option("query", str, description="Paste a link or type a song name to search", required=True)
     async def play(
         self, 
         ctx: discord.ApplicationContext, 
-        url: str
+        query: str
     ):
-        # 1. Defer the response because pulling metadata from YouTube takes 1–3 seconds
         await ctx.defer()
 
-        # 2. Safety Check: Verify if the user is currently inside a Voice Channel
+        # User must be in VC
         if not getattr(ctx.author, "voice", None):
             return await ctx.respond("[❌] You must be inside a voice channel to use this command!")
 
         user_voice_channel = ctx.author.voice.channel
 
-        # 3. Connect to the Voice Channel if the bot isn't already there
+        # VC Connection
         if ctx.voice_client is None:
             vc = await user_voice_channel.connect()
         else:
             vc = ctx.voice_client
 
         # Spotify Bait and Switch
-        if "spotify.com" in url:
+        if "spotify.com" in query:
             try:
                 async with aiohttp.ClientSession() as session:
-                    async with session.get(f"https://open.spotify.com/oembed?url={url}") as resp:
+                    async with session.get(f"https://open.spotify.com/oembed?url={query}") as resp:
                         if resp.status == 200:
                             data = await resp.json()
                             # Overwrite the URL with a YouTube search query for the top result
@@ -192,7 +191,7 @@ class Music(commands.Cog):
 
                             # Fallback if Spotify's Oembed API omits the author name
                             if not author:
-                                async with session.get(url) as html_resp:
+                                async with session.get(query) as html_resp:
                                     if html_resp.status == 200:
                                         html = await html_resp.text()
                                         match = re.search(r'<title>(.*?)</title>', html, re.IGNORECASE)
@@ -200,19 +199,23 @@ class Music(commands.Cog):
                                             # Grabs e.g., "Song - song and lyrics by Artist | Spotify"
                                             title = match.group(1).replace(" | Spotify", "")
                                             
-                            url = f"ytsearch1:{title} {author} audio".strip()
+                            query = f"ytsearch1:{title} {author} audio".strip()
                         else:
                             return await ctx.respond("[❌] Could not extract track info from that Spotify link.")
             except Exception as e:
                 return await ctx.respond(f"[❌] Error connecting to Spotify: {e}")
+            
+        # Plain Text Search (No URL provided)
+        elif not query.startswith(('http://', 'https://')):
+            query = f"ytsearch1:{query}"
 
-        # 4. Extract the direct audio stream from the link using yt-dlp
+        # Extract from Link
         with yt_dlp.YoutubeDL(YTDL_OPTIONS) as ydl:
             try:
                 # Extract metadata without downloading the actual file to your machine.
                 # We use a background thread to prevent the synchronous yt-dlp library from freezing the bot.
                 loop = asyncio.get_event_loop()
-                info = await loop.run_in_executor(None, lambda: ydl.extract_info(url, download=False))
+                info = await loop.run_in_executor(None, lambda: ydl.extract_info(query, download=False))
                 
                 # Extract the first result if it's a search result
                 if 'entries' in info:
@@ -223,11 +226,11 @@ class Music(commands.Cog):
                 duration = info.get('duration', 0)
                 thumbnail = info.get('thumbnail')
                 # Store the direct YouTube link so the background queue player doesn't have to search again
-                resolved_url = info.get('webpage_url', url)
+                resolved_url = info.get('webpage_url', query)
             except Exception as e:
                 return await ctx.respond(f"[❌] Failed to extract audio stream from that link. Error: {e}")
 
-        # 5. Check if we should queue the song or play it immediately
+        # Play or Queue Decision
         if vc.is_playing() or vc.is_paused():
             # Initialize the server's queue if it doesn't exist yet
             if ctx.guild.id not in self.queues:
@@ -237,7 +240,7 @@ class Music(commands.Cog):
             self.queues[ctx.guild.id].append({'url': resolved_url, 'title': title, 'thumbnail': thumbnail})
             return await ctx.respond(f"✅ Added to queue: **{title}**")
 
-        # 6. Stream the raw audio directly into the voice channel using FFmpeg
+        # Streaming
         raw_audio = discord.FFmpegPCMAudio(stream_url, **FFMPEG_OPTIONS)
         audio_source = discord.PCMVolumeTransformer(raw_audio, volume=0.30) # Sets volume to 50%
         
@@ -250,10 +253,8 @@ class Music(commands.Cog):
             'is_paused': False,
             'accumulated_time': 0
         }
-        
-        # IMPORTANT: Add the after callback here!
+    
         vc.play(audio_source, after=lambda e: self.check_queue(ctx))
-
         view = MusicController(self, ctx)
         await ctx.respond(embed=view.get_progress_embed(), view=view)
 
