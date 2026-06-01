@@ -6,6 +6,7 @@ import asyncio
 import time
 import aiohttp
 import re
+from database.manager import track_song_play
 
 # Configurations for yt-dlp to extract the stream link safely
 YTDL_OPTIONS = {
@@ -36,6 +37,13 @@ def create_progress_bar(current_sec, total_sec, length=20):
     tot_str = time.strftime('%H:%M:%S' if total_sec >= 3600 else '%M:%S', time.gmtime(total_sec))
     
     return f"{bar} `{curr_str} / {tot_str}`"
+
+def clean_song_title(title: str) -> str:
+    """Removes common YouTube video tags like (Official Video) or [Lyric Video]."""
+    title = re.sub(r'(?i)\s*[\[(][^\])]*(?:official|music|lyric|audio|video|visualizer|mv|live|hd|hq|4k)[^\])]*[\])]', '', title)
+    # Also remove common unbracketed tags at the end of the title
+    title = re.sub(r'(?i)\s*(?:[-|]\s*)?\b(?:official\s+(?:music\s+|lyric\s+)?video|official\s+audio|lyric\s+video|music\s+video|visualizer|audio)\b.*$', '', title)
+    return re.sub(r'\s*[-|]\s*$', '', title).strip()
 
 class MusicController(discord.ui.View):
     """Interactive buttons attached to the 'Now Playing' message."""
@@ -133,9 +141,10 @@ class Music(commands.Cog):
                 info = info['entries'][0]
                 
             stream_url = info['url']
-            title = info.get('title', 'Unknown Title')
+            title = clean_song_title(info.get('title', 'Unknown Title'))
             duration = info.get('duration', 0)
             thumbnail = info.get('thumbnail')
+            video_id = info.get('id')
 
         raw_audio = discord.FFmpegPCMAudio(stream_url, **FFMPEG_OPTIONS)
         audio_source = discord.PCMVolumeTransformer(raw_audio, volume=0.30) # Sets volume to 50%
@@ -153,6 +162,9 @@ class Music(commands.Cog):
         # Pass check_queue back into 'after' to keep the loop going!
         vc.play(audio_source, after=lambda e: self.check_queue(ctx))
         
+        if video_id:
+            asyncio.create_task(track_song_play(video_id, title))
+            
         view = MusicController(self, ctx)
         await ctx.send(embed=view.get_progress_embed(), view=view)
 
@@ -227,6 +239,7 @@ class Music(commands.Cog):
                 thumbnail = info.get('thumbnail')
                 # Store the direct YouTube link so the background queue player doesn't have to search again
                 resolved_url = info.get('webpage_url', query)
+                video_id = info.get('id')
             except Exception as e:
                 return await ctx.respond(f"[❌] Failed to extract audio stream from that link. Error: {e}")
 
@@ -255,6 +268,10 @@ class Music(commands.Cog):
         }
     
         vc.play(audio_source, after=lambda e: self.check_queue(ctx))
+        
+        if video_id:
+            asyncio.create_task(track_song_play(video_id, title))
+            
         view = MusicController(self, ctx)
         await ctx.respond(embed=view.get_progress_embed(), view=view)
 

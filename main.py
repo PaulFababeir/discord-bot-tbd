@@ -13,6 +13,7 @@ cogs_list = [
     'cogs.general',
     'cogs.info',
     'cogs.music',
+    'cogs.leaderboard',
 ]
 
 for cog in cogs_list:
