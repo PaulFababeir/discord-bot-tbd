@@ -5,6 +5,7 @@ import yt_dlp
 import asyncio
 import time
 import aiohttp
+import re
 
 # Configurations for yt-dlp to extract the stream link safely
 YTDL_OPTIONS = {
@@ -186,7 +187,20 @@ class Music(commands.Cog):
                         if resp.status == 200:
                             data = await resp.json()
                             # Overwrite the URL with a YouTube search query for the top result
-                            url = f"ytsearch1:{data['title']} {data['author_name']}"
+                            title = data.get('title', 'Unknown Title')
+                            author = data.get('author_name', '')
+
+                            # Fallback if Spotify's Oembed API omits the author name
+                            if not author:
+                                async with session.get(url) as html_resp:
+                                    if html_resp.status == 200:
+                                        html = await html_resp.text()
+                                        match = re.search(r'<title>(.*?)</title>', html, re.IGNORECASE)
+                                        if match:
+                                            # Grabs e.g., "Song - song and lyrics by Artist | Spotify"
+                                            title = match.group(1).replace(" | Spotify", "")
+                                            
+                            url = f"ytsearch1:{title} {author} audio".strip()
                         else:
                             return await ctx.respond("[❌] Could not extract track info from that Spotify link.")
             except Exception as e:
