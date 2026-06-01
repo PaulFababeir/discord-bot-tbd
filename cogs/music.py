@@ -392,6 +392,15 @@ class Music(commands.Cog):
         removed_song = queue_list.pop(index - 1)
         await ctx.respond(f"🗑️ Removed from queue: **{removed_song['title']}**")
 
+    # CLEAR QUEUE COMMAND
+    @slash_command(description="Clears all songs from the current queue.")
+    async def clearqueue(self, ctx: discord.ApplicationContext):
+        if ctx.guild.id not in self.queues or not self.queues[ctx.guild.id]:
+            return await ctx.respond("[⚠️] The queue is already empty.")
+            
+        self.queues[ctx.guild.id].clear()
+        await ctx.respond("🗑️ **The queue has been completely cleared!**")
+
     # NOW PLAYING COMMAND
     @slash_command(description="Displays the currently playing song and its progress.")
     async def nowplaying(self, ctx: discord.ApplicationContext):

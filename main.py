@@ -4,9 +4,11 @@ from dotenv import load_dotenv
 
 load_dotenv() # load all the variables from the env file
 
-# Load the testing guild ID from the .env file
-guild_id = os.getenv('GUILD_ID')
-bot = discord.Bot(debug_guilds=[int(guild_id)] if guild_id else None)
+# Load testing guild IDs from the .env file (supports comma-separated IDs)
+raw_guild_ids = os.getenv('GUILD_ID')
+debug_guilds = [int(g_id.strip()) for g_id in raw_guild_ids.split(',')] if raw_guild_ids else None
+
+bot = discord.Bot()
 
 # List of cogs to load
 cogs_list = [
