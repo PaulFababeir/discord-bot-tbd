@@ -6,6 +6,7 @@ import asyncio
 import time
 import aiohttp
 import re
+from database.manager import track_song_play
 
 # Configurations for yt-dlp to extract the stream link safely
 YTDL_OPTIONS = {
@@ -136,6 +137,7 @@ class Music(commands.Cog):
             title = info.get('title', 'Unknown Title')
             duration = info.get('duration', 0)
             thumbnail = info.get('thumbnail')
+            video_id = info.get('id')
 
         raw_audio = discord.FFmpegPCMAudio(stream_url, **FFMPEG_OPTIONS)
         audio_source = discord.PCMVolumeTransformer(raw_audio, volume=0.30) # Sets volume to 50%
@@ -153,6 +155,9 @@ class Music(commands.Cog):
         # Pass check_queue back into 'after' to keep the loop going!
         vc.play(audio_source, after=lambda e: self.check_queue(ctx))
         
+        if video_id:
+            asyncio.create_task(track_song_play(video_id, title))
+            
         view = MusicController(self, ctx)
         await ctx.send(embed=view.get_progress_embed(), view=view)
 
@@ -227,6 +232,7 @@ class Music(commands.Cog):
                 thumbnail = info.get('thumbnail')
                 # Store the direct YouTube link so the background queue player doesn't have to search again
                 resolved_url = info.get('webpage_url', query)
+                video_id = info.get('id')
             except Exception as e:
                 return await ctx.respond(f"[❌] Failed to extract audio stream from that link. Error: {e}")
 
@@ -255,6 +261,10 @@ class Music(commands.Cog):
         }
     
         vc.play(audio_source, after=lambda e: self.check_queue(ctx))
+        
+        if video_id:
+            asyncio.create_task(track_song_play(video_id, title))
+            
         view = MusicController(self, ctx)
         await ctx.respond(embed=view.get_progress_embed(), view=view)
 
