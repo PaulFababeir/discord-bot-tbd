@@ -38,6 +38,13 @@ def create_progress_bar(current_sec, total_sec, length=20):
     
     return f"{bar} `{curr_str} / {tot_str}`"
 
+def clean_song_title(title: str) -> str:
+    """Removes common YouTube video tags like (Official Video) or [Lyric Video]."""
+    title = re.sub(r'(?i)\s*[\[(][^\])]*(?:official|music|lyric|audio|video|visualizer|mv|live|hd|hq|4k)[^\])]*[\])]', '', title)
+    # Also remove common unbracketed tags at the end of the title
+    title = re.sub(r'(?i)\s*(?:[-|]\s*)?\b(?:official\s+(?:music\s+|lyric\s+)?video|official\s+audio|lyric\s+video|music\s+video|visualizer|audio)\b.*$', '', title)
+    return re.sub(r'\s*[-|]\s*$', '', title).strip()
+
 class MusicController(discord.ui.View):
     """Interactive buttons attached to the 'Now Playing' message."""
     def __init__(self, cog, ctx):
@@ -134,7 +141,7 @@ class Music(commands.Cog):
                 info = info['entries'][0]
                 
             stream_url = info['url']
-            title = info.get('title', 'Unknown Title')
+            title = clean_song_title(info.get('title', 'Unknown Title'))
             duration = info.get('duration', 0)
             thumbnail = info.get('thumbnail')
             video_id = info.get('id')
