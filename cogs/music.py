@@ -137,7 +137,7 @@ class Music(commands.Cog):
             thumbnail = info.get('thumbnail')
 
         raw_audio = discord.FFmpegPCMAudio(stream_url, **FFMPEG_OPTIONS)
-        audio_source = discord.PCMVolumeTransformer(raw_audio, volume=0.70) # Sets volume to 50%
+        audio_source = discord.PCMVolumeTransformer(raw_audio, volume=0.30) # Sets volume to 50%
         
         self.current_track[ctx.guild.id] = {
             'title': title,
@@ -225,7 +225,7 @@ class Music(commands.Cog):
 
         # 6. Stream the raw audio directly into the voice channel using FFmpeg
         raw_audio = discord.FFmpegPCMAudio(stream_url, **FFMPEG_OPTIONS)
-        audio_source = discord.PCMVolumeTransformer(raw_audio, volume=0.70) # Sets volume to 50%
+        audio_source = discord.PCMVolumeTransformer(raw_audio, volume=0.30) # Sets volume to 50%
         
         self.current_track[ctx.guild.id] = {
             'title': title,
@@ -288,7 +288,7 @@ class Music(commands.Cog):
         elif ctx.guild and ctx.guild.me.voice:
             # Handles the edge case where the bot lost its local voice state but is physically still in the VC
             await ctx.guild.me.edit(voice_channel=None)
-            await ctx.respond("[👋] Forcefully left the voice channel after a restart.")
+            await ctx.respond("[👋] Left the voice channel.")
         else:
             await ctx.respond("[❌] I am not connected to any voice channel.")
     
