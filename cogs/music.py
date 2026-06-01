@@ -213,9 +213,11 @@ class Music(commands.Cog):
                                             
                             query = f"ytsearch1:{title} {author} audio".strip()
                         else:
-                            return await ctx.respond("[❌] Could not extract track info from that Spotify link.")
+                            print(f"[Spotify Error] Status {resp.status} for {query}")
+                            return await ctx.respond("[❌] Could not extract track info from that Spotify link. The link may be private or invalid.")
             except Exception as e:
-                return await ctx.respond(f"[❌] Error connecting to Spotify: {e}")
+                print(f"[Spotify Error] An exception occurred: {e}")
+                return await ctx.respond(f"[❌] An error occurred while trying to process that Spotify link.")
             
         # Plain Text Search (No URL provided)
         elif not query.startswith(('http://', 'https://')):
@@ -241,7 +243,8 @@ class Music(commands.Cog):
                 resolved_url = info.get('webpage_url', query)
                 video_id = info.get('id')
             except Exception as e:
-                return await ctx.respond(f"[❌] Failed to extract audio stream from that link. Error: {e}")
+                print(f"[YTDL Error] Failed to extract from '{query}'. Error: {e}")
+                return await ctx.respond(f"[❌] Failed to get a playable song from that query. It might be region-locked, private, or unavailable.")
 
         # Play or Queue Decision
         if vc.is_playing() or vc.is_paused():
