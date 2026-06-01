@@ -4,6 +4,7 @@ from discord.ext import commands, pages
 import yt_dlp
 import asyncio
 import time
+import aiohttp
 
 # Configurations for yt-dlp to extract the stream link safely
 YTDL_OPTIONS = {
@@ -125,6 +126,11 @@ class Music(commands.Cog):
         with yt_dlp.YoutubeDL(YTDL_OPTIONS) as ydl:
             loop = asyncio.get_event_loop()
             info = await loop.run_in_executor(None, lambda: ydl.extract_info(original_url, download=False))
+            
+            # Extract the actual track info if a search query/playlist was provided
+            if 'entries' in info:
+                info = info['entries'][0]
+                
             stream_url = info['url']
             title = info.get('title', 'Unknown Title')
             duration = info.get('duration', 0)
@@ -171,6 +177,20 @@ class Music(commands.Cog):
         else:
             vc = ctx.voice_client
 
+        # Spotify Bait and Switch
+        if "spotify.com" in url:
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(f"https://open.spotify.com/oembed?url={url}") as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            # Overwrite the URL with a YouTube search query for the top result
+                            url = f"ytsearch1:{data['title']} {data['author_name']}"
+                        else:
+                            return await ctx.respond("[❌] Could not extract track info from that Spotify link.")
+            except Exception as e:
+                return await ctx.respond(f"[❌] Error connecting to Spotify: {e}")
+
         # 4. Extract the direct audio stream from the link using yt-dlp
         with yt_dlp.YoutubeDL(YTDL_OPTIONS) as ydl:
             try:
@@ -178,10 +198,17 @@ class Music(commands.Cog):
                 # We use a background thread to prevent the synchronous yt-dlp library from freezing the bot.
                 loop = asyncio.get_event_loop()
                 info = await loop.run_in_executor(None, lambda: ydl.extract_info(url, download=False))
+                
+                # Extract the first result if it's a search result
+                if 'entries' in info:
+                    info = info['entries'][0]
+                    
                 stream_url = info['url']
                 title = info.get('title', 'Unknown Title')
                 duration = info.get('duration', 0)
                 thumbnail = info.get('thumbnail')
+                # Store the direct YouTube link so the background queue player doesn't have to search again
+                resolved_url = info.get('webpage_url', url)
             except Exception as e:
                 return await ctx.respond(f"[❌] Failed to extract audio stream from that link. Error: {e}")
 
@@ -192,7 +219,7 @@ class Music(commands.Cog):
                 self.queues[ctx.guild.id] = []
             
             # Add the URL, Title, and Thumbnail to the queue
-            self.queues[ctx.guild.id].append({'url': url, 'title': title, 'thumbnail': thumbnail})
+            self.queues[ctx.guild.id].append({'url': resolved_url, 'title': title, 'thumbnail': thumbnail})
             return await ctx.respond(f"✅ Added to queue: **{title}**")
 
         # 6. Stream the raw audio directly into the voice channel using FFmpeg
@@ -200,7 +227,7 @@ class Music(commands.Cog):
         
         self.current_track[ctx.guild.id] = {
             'title': title,
-            'url': url,
+            'url': resolved_url,
             'duration': duration,
             'thumbnail': thumbnail,
             'start_time': time.time(),
