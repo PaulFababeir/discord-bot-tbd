@@ -5,7 +5,7 @@ import yt_dlp
 import asyncio
 import aiohttp
 import re
-from database.manager import create_playlist, get_playlists, add_song_to_playlist, remove_song_from_playlist, get_songs_in_playlist
+from database.manager import create_playlist, get_playlists, add_song_to_playlist, remove_song_from_playlist, get_songs_in_playlist, clear_playlist, delete_playlist
 
 YTDL_OPTIONS = {
     'format': 'bestaudio/best',
@@ -149,6 +149,46 @@ class Playlist(commands.Cog):
             await ctx.respond(f"✅ Successfully removed song **#{song_id}** from the playlist!")
         else:
             await ctx.respond(f"❌ Failed to remove song. Ensure the Song ID **#{song_id}** exists.")
+
+    # CLEAR PLAYLIST
+    @slash_command(name="clearplaylist", description="Removes all songs from a specific playlist.")
+    @option("playlist_id", int, description="The ID of the playlist to clear", required=True)
+    async def clearplaylist(self, ctx: discord.ApplicationContext, playlist_id: int):
+        await ctx.defer()
+        
+        songs = await get_songs_in_playlist(playlist_id=playlist_id)
+        if songs is None:
+            return await ctx.respond(f"❌ Failed to fetch songs for Playlist **#{playlist_id}**.")
+            
+        if not songs:
+            return await ctx.respond(f"⚠️ Playlist **#{playlist_id}** is already empty.")
+            
+        data = await clear_playlist(playlist_id=playlist_id)
+        
+        if data is not None:
+            await ctx.respond(f"✅ Successfully removed **{len(songs)}** songs from Playlist **#{playlist_id}**!")
+        else:
+            await ctx.respond(f"❌ Failed to clear Playlist **#{playlist_id}**.")
+
+    # DELETE PLAYLIST
+    @slash_command(name="deleteplaylist", description="Deletes an empty playlist.")
+    @option("playlist_id", int, description="The ID of the playlist to delete", required=True)
+    async def deleteplaylist(self, ctx: discord.ApplicationContext, playlist_id: int):
+        await ctx.defer()
+        
+        songs = await get_songs_in_playlist(playlist_id=playlist_id)
+        if songs is None:
+            return await ctx.respond(f"❌ Failed to check Playlist **#{playlist_id}**. Ensure it exists.")
+            
+        if len(songs) > 0:
+            return await ctx.respond(f"⚠️ Playlist **#{playlist_id}** is not empty! Please use `/clearplaylist` first.")
+            
+        data = await delete_playlist(playlist_id=playlist_id)
+        
+        if data:
+            await ctx.respond(f"✅ Successfully deleted Playlist **#{playlist_id}**!")
+        else:
+            await ctx.respond(f"❌ Failed to delete playlist. Ensure the Playlist ID **#{playlist_id}** exists.")
 
     # SHOW PLAYLIST SONGS
     @slash_command(name="songs", description="Displays the songs inside a specific playlist.")
