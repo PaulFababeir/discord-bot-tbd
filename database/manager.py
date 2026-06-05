@@ -80,3 +80,12 @@ async def remove_song_from_playlist(song_id: int):
     except Exception as e:
         print(f"[DB ERROR] Error removing song {song_id}: {e}")
         return None
+
+async def get_songs_in_playlist(playlist_id: int):
+    """Fetches all songs in a specific playlist."""
+    try:
+        response = supabase.table("songs").select("*").eq("playlist_id", playlist_id).order("song_id").execute()
+        return response.data
+    except Exception as e:
+        print(f"[DB ERROR] Error fetching songs for playlist {playlist_id}: {e}")
+        return None

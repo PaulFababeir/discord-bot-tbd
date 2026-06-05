@@ -5,7 +5,7 @@ import yt_dlp
 import asyncio
 import aiohttp
 import re
-from database.manager import create_playlist, get_playlists, add_song_to_playlist, remove_song_from_playlist
+from database.manager import create_playlist, get_playlists, add_song_to_playlist, remove_song_from_playlist, get_songs_in_playlist
 
 YTDL_OPTIONS = {
     'format': 'bestaudio/best',
@@ -149,6 +149,45 @@ class Playlist(commands.Cog):
             await ctx.respond(f"✅ Successfully removed song **#{song_id}** from the playlist!")
         else:
             await ctx.respond(f"❌ Failed to remove song. Ensure the Song ID **#{song_id}** exists.")
+
+    # SHOW PLAYLIST SONGS
+    @slash_command(name="songs", description="Displays the songs inside a specific playlist.")
+    @option("playlist_id", int, description="The ID of the playlist to view", required=True)
+    async def songs(self, ctx: discord.ApplicationContext, playlist_id: int):
+        await ctx.defer()
+        
+        songs = await get_songs_in_playlist(playlist_id=playlist_id)
+        
+        if songs is None:
+            return await ctx.respond(f"❌ Failed to fetch songs for Playlist **#{playlist_id}**.")
+            
+        if not songs:
+            return await ctx.respond(f"⚠️ Playlist **#{playlist_id}** is currently empty or does not exist.")
+            
+        embeds = []
+        chunk_size = 10 # Display 10 songs per page
+        
+        for i in range(0, len(songs), chunk_size):
+            chunk = songs[i:i+chunk_size]
+            
+            embed = discord.Embed(title=f"🎶 Playlist #{playlist_id} Songs", color=discord.Color.purple())
+            
+            description = ""
+            for song in chunk:
+                song_id = song.get("song_id")
+                title = song.get("song_title", "Unknown Title")
+                url = song.get("song_link", "")
+                
+                description += f"**ID: {song_id}** - [{title}]({url})\n\n"
+                
+            embed.description = description
+            embeds.append(embed)
+            
+        if len(embeds) == 1:
+            await ctx.respond(embed=embeds[0])
+        else:
+            paginator = pages.Paginator(pages=embeds, show_disabled=True, show_indicator=True)
+            await paginator.respond(ctx.interaction)
 
 def setup(bot):
     bot.add_cog(Playlist(bot))
