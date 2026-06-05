@@ -189,5 +189,63 @@ class Playlist(commands.Cog):
             paginator = pages.Paginator(pages=embeds, show_disabled=True, show_indicator=True)
             await paginator.respond(ctx.interaction)
 
+    # PLAY PLAYLIST
+    @slash_command(name="playplaylist", description="Queues and plays all songs from a specific playlist.")
+    @option("playlist_id", int, description="The ID of the playlist to play", required=True)
+    async def playplaylist(self, ctx: discord.ApplicationContext, playlist_id: int):
+        await ctx.defer()
+        
+        songs = await get_songs_in_playlist(playlist_id=playlist_id)
+        
+        if songs is None:
+            return await ctx.respond(f"❌ Failed to fetch songs for Playlist **#{playlist_id}**.")
+            
+        if not songs:
+            return await ctx.respond(f"⚠️ Playlist **#{playlist_id}** is currently empty or does not exist.")
+            
+        # User must be in a Voice Channel
+        if not getattr(ctx.author, "voice", None):
+            return await ctx.respond("[❌] You must be inside a voice channel to use this command!")
+            
+        user_voice_channel = ctx.author.voice.channel
+        
+        # Connect to VC if not already connected
+        if ctx.voice_client is None:
+            vc = await user_voice_channel.connect()
+        else:
+            vc = ctx.voice_client
+            
+        # Retrieve the Music cog to interact with its queue and methods
+        music_cog = self.bot.get_cog("Music")
+        if not music_cog:
+            return await ctx.respond("[❌] The Music module is currently unavailable.")
+            
+        if ctx.guild.id not in music_cog.queues:
+            music_cog.queues[ctx.guild.id] = []
+            
+        is_idle = not (vc.is_playing() or vc.is_paused())
+        
+        if is_idle:
+            first_song = songs.pop(0)
+            
+            # Add the rest to the queue
+            music_cog.queues[ctx.guild.id].extend([
+                {'url': s.get("song_link"), 'title': s.get("song_title"), 'thumbnail': None}
+                for s in songs
+            ])
+            
+            await ctx.respond(f"✅ Queued **{len(songs) + 1}** songs from Playlist **#{playlist_id}**! Starting playback...")
+            
+            # Start playing the first song directly
+            await music_cog.play_next_song(ctx, first_song.get("song_link"))
+        else:
+            # Just add all to the queue
+            music_cog.queues[ctx.guild.id].extend([
+                {'url': s.get("song_link"), 'title': s.get("song_title"), 'thumbnail': None}
+                for s in songs
+            ])
+            
+            await ctx.respond(f"✅ Added **{len(songs)}** songs from Playlist **#{playlist_id}** to the queue!")
+
 def setup(bot):
     bot.add_cog(Playlist(bot))
