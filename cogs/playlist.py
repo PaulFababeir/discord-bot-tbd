@@ -5,7 +5,7 @@ import yt_dlp
 import asyncio
 import aiohttp
 import re
-from database.manager import create_playlist, get_playlists, add_song_to_playlist
+from database.manager import create_playlist, get_playlists, add_song_to_playlist, remove_song_from_playlist
 
 YTDL_OPTIONS = {
     'format': 'bestaudio/best',
@@ -135,6 +135,20 @@ class Playlist(commands.Cog):
             await ctx.respond(f"✅ Successfully added **{title}** to Playlist **#{playlist_id}**!")
         else:
             await ctx.respond(f"❌ Failed to add song. Ensure the Playlist ID **#{playlist_id}** exists.")
+
+    # REMOVE SONG FROM PLAYLIST
+    @slash_command(name="removesong", description="Removes a song from a playlist.")
+    @option("song_id", int, description="The ID of the song to remove", required=True)
+    async def removesong(self, ctx: discord.ApplicationContext, song_id: int):
+        await ctx.defer()
+        
+        # Delete the song from the database using its unique song_id
+        data = await remove_song_from_playlist(song_id=song_id)
+        
+        if data:
+            await ctx.respond(f"✅ Successfully removed song **#{song_id}** from the playlist!")
+        else:
+            await ctx.respond(f"❌ Failed to remove song. Ensure the Song ID **#{song_id}** exists.")
 
 def setup(bot):
     bot.add_cog(Playlist(bot))

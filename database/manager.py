@@ -71,3 +71,12 @@ async def add_song_to_playlist(playlist_id: int, song_link: str, song_title: str
     except Exception as e:
         print(f"[DB ERROR] Error adding song to playlist {playlist_id}: {e}")
         return None
+
+async def remove_song_from_playlist(song_id: int):
+    """Removes a song from a playlist by its song ID."""
+    try:
+        response = supabase.table("songs").delete().eq("song_id", song_id).execute()
+        return response.data
+    except Exception as e:
+        print(f"[DB ERROR] Error removing song {song_id}: {e}")
+        return None
