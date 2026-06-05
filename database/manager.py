@@ -34,3 +34,15 @@ async def get_top_songs(limit: int = 10):
     """Fetches the most popular songs globally for your leaderboard command."""
     response = supabase.table("song_leaderboard").select("*").order("play_count", desc=True).limit(limit).execute()
     return response.data
+
+async def create_playlist(name: str, owner_id: int):
+    """Creates a new playlist for a user."""
+    try:
+        response = supabase.table("playlist").insert({
+            "playlist_name": name,
+            "owner_id": owner_id
+        }).execute()
+        return response.data
+    except Exception as e:
+        print(f"[DB ERROR] Error creating playlist '{name}' for {owner_id}: {e}")
+        return None
