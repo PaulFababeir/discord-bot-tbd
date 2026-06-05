@@ -46,3 +46,28 @@ async def create_playlist(name: str, owner_id: int):
     except Exception as e:
         print(f"[DB ERROR] Error creating playlist '{name}' for {owner_id}: {e}")
         return None
+
+async def get_playlists(owner_id: int = None):
+    """Fetches playlists and their associated song counts."""
+    try:
+        query = supabase.table("playlist").select("id, playlist_name, owner_id, songs(song_id)").order("id")
+        if owner_id:
+            query = query.eq("owner_id", owner_id)
+        response = query.execute()
+        return response.data
+    except Exception as e:
+        print(f"[DB ERROR] Error fetching playlists: {e}")
+        return None
+
+async def add_song_to_playlist(playlist_id: int, song_link: str, song_title: str):
+    """Adds a song to a playlist."""
+    try:
+        response = supabase.table("songs").insert({
+            "playlist_id": playlist_id,
+            "song_link": song_link,
+            "song_title": song_title
+        }).execute()
+        return response.data
+    except Exception as e:
+        print(f"[DB ERROR] Error adding song to playlist {playlist_id}: {e}")
+        return None
