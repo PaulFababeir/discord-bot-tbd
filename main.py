@@ -8,7 +8,11 @@ load_dotenv() # load all the variables from the env file
 raw_guild_ids = os.getenv('GUILD_ID')
 debug_guilds = [int(g_id.strip()) for g_id in raw_guild_ids.split(',')] if raw_guild_ids else None
 
-bot = discord.Bot()
+# DEBUG
+bot = discord.Bot(debug_guilds=debug_guilds)
+
+# PRODUCTION
+# bot = discord.Bot()
 
 # List of cogs to load
 cogs_list = [
@@ -16,6 +20,7 @@ cogs_list = [
     'cogs.info',
     'cogs.music',
     'cogs.leaderboard',
+    'cogs.playlist'
 ]
 
 for cog in cogs_list:
