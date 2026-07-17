@@ -1,5 +1,3 @@
-# Taro 🎶
-
 A Discord music bot with playlists and a global leaderboard, built on Pycord and yt-dlp.
 
 <p>
@@ -104,7 +102,9 @@ Leaving `GUILD_ID` unset makes slash commands sync globally instead of instantly
 
 ### Database
 
-Set up two Supabase tables: `playlist` (`id`, `playlist_name`, `owner_id`), `songs` (`song_id`, `playlist_id`, `song_link`, `song_title`), and `song_leaderboard` (`video_id`, `title`, `play_count`, `updated_at`).
+Run [`database/schema.sql`](database/schema.sql) in your Supabase project's **SQL Editor** to create the three required tables (`playlist`, `songs`, `song_leaderboard`) with the correct types, primary keys, and foreign key.
+
+Note: Supabase free-tier projects auto-pause after a period of inactivity — if the bot's DB-backed commands (`/topsongs`, playlist commands) suddenly stop working, check your project's dashboard for a paused state before assuming it's a code issue.
 
 ### Run
 

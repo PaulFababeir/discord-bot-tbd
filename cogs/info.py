@@ -10,7 +10,7 @@ class Info(commands.Cog):
     @slash_command(name="info", description="Displays detailed information about the bot")
     async def info(self, ctx: discord.ApplicationContext):
         embed = discord.Embed(
-            title="🤖 hiiii im Taro >////<",
+            title="🤖 hiiii >////<",
             description="A music bot side project by Fabi",
             color=discord.Color.dark_green()
         )
