@@ -8,11 +8,16 @@ load_dotenv() # load all the variables from the env file
 raw_guild_ids = os.getenv('GUILD_ID')
 debug_guilds = [int(g_id.strip()) for g_id in raw_guild_ids.split(',')] if raw_guild_ids else None
 
+# Presence shown under the bot's name in the member list ("Listening to /play")
+# Change the type with discord.ActivityType.playing / .watching / .listening,
+# and status with discord.Status.online / .idle / .dnd / .invisible
+presence = discord.Activity(type=discord.ActivityType.watching, name="🎬 Letterboxd")
+
 # DEBUG
-bot = discord.Bot(debug_guilds=debug_guilds)
+bot = discord.Bot(debug_guilds=debug_guilds, activity=presence, status=discord.Status.online)
 
 # PRODUCTION
-# bot = discord.Bot()
+# bot = discord.Bot(activity=presence, status=discord.Status.online)
 
 # List of cogs to load
 cogs_list = [
