@@ -4,46 +4,23 @@ from discord.ext import commands, pages
 import yt_dlp
 import asyncio
 import time
-import aiohttp
-import re
 from database.manager import track_song_play
-
-# Configurations for yt-dlp to extract the stream link safely
-YTDL_OPTIONS = {
-    'format': 'bestaudio/best',
-    'noplaylist': True,
-    'quiet': True,
-    'no_warnings': True,
-    'source_address': '0.0.0.0' # Forces IPv4 to prevent connection timeouts
-}
-
-# Advanced FFmpeg arguments that ensure a smooth network stream
-FFMPEG_OPTIONS = {
-    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
-    'options': '-vn' # Processes audio only, ignoring the heavy video channel
-}
+from utils import YTDL_OPTIONS, FFMPEG_OPTIONS, clean_song_title, resolve_query, SpotifyResolutionError
 
 def create_progress_bar(current_sec, total_sec, length=20):
     """Generates a text-based progress bar."""
     if not total_sec:
         return "🔘" + "▬" * (length - 1) + " `Live / Unknown Duration`"
-    
+
     progress = int(length * current_sec / total_sec)
     progress = max(0, min(length - 1, progress)) # Keep index in bounds
-    
+
     bar = "▬" * progress + "🔘" + "▬" * (length - progress - 1)
-    
+
     curr_str = time.strftime('%H:%M:%S' if total_sec >= 3600 else '%M:%S', time.gmtime(current_sec))
     tot_str = time.strftime('%H:%M:%S' if total_sec >= 3600 else '%M:%S', time.gmtime(total_sec))
-    
-    return f"{bar} `{curr_str} / {tot_str}`"
 
-def clean_song_title(title: str) -> str:
-    """Removes common YouTube video tags like (Official Video) or [Lyric Video]."""
-    title = re.sub(r'(?i)\s*[\[(][^\])]*(?:official|music|lyric|audio|video|visualizer|mv|live|hd|hq|4k)[^\])]*[\])]', '', title)
-    # Also remove common unbracketed tags at the end of the title
-    title = re.sub(r'(?i)\s*(?:[-|]\s*)?\b(?:official\s+(?:music\s+|lyric\s+)?video|official\s+audio|lyric\s+video|music\s+video|visualizer|audio)\b.*$', '', title)
-    return re.sub(r'\s*[-|]\s*$', '', title).strip()
+    return f"{bar} `{curr_str} / {tot_str}`"
 
 class MusicController(discord.ui.View):
     """Interactive buttons attached to the 'Now Playing' message."""
@@ -106,10 +83,14 @@ class Music(commands.Cog):
         self.bot = bot
         self.queues = {} # Maps guild IDs to a list of queued songs
         self.current_track = {} # Maps guild IDs to current track info
+        self._startup_cleared = False
 
-    # CLEAR VC STATE
+    # CLEAR VC STATE (only on true process startup, not on gateway reconnects)
     @commands.Cog.listener()
     async def on_ready(self):
+        if self._startup_cleared:
+            return
+        self._startup_cleared = True
         for guild in self.bot.guilds:
             if guild.me.voice:
                 await guild.me.edit(voice_channel=None)
@@ -133,21 +114,27 @@ class Music(commands.Cog):
 
         # Re-extract the stream to prevent "HTTP 403 Forbidden" expiration errors
         with yt_dlp.YoutubeDL(YTDL_OPTIONS) as ydl:
-            loop = asyncio.get_event_loop()
-            info = await loop.run_in_executor(None, lambda: ydl.extract_info(original_url, download=False))
-            
-            # Extract the actual track info if a search query/playlist was provided
-            if 'entries' in info:
-                info = info['entries'][0]
-                
-            stream_url = info['url']
-            title = clean_song_title(info.get('title', 'Unknown Title'))
-            duration = info.get('duration', 0)
-            thumbnail = info.get('thumbnail')
-            video_id = info.get('id')
+            try:
+                loop = asyncio.get_event_loop()
+                info = await loop.run_in_executor(None, lambda: ydl.extract_info(original_url, download=False))
+
+                # Extract the actual track info if a search query/playlist was provided
+                if 'entries' in info:
+                    info = info['entries'][0]
+
+                stream_url = info['url']
+                title = clean_song_title(info.get('title', 'Unknown Title'))
+                duration = info.get('duration', 0)
+                thumbnail = info.get('thumbnail')
+                video_id = info.get('id')
+            except Exception as e:
+                print(f"[YTDL Error] Failed to extract from '{original_url}'. Error: {e}")
+                await ctx.send(f"[❌] Skipping a song — failed to load it from the queue.")
+                self.check_queue(ctx) # Try the next song in the queue
+                return
 
         raw_audio = discord.FFmpegPCMAudio(stream_url, **FFMPEG_OPTIONS)
-        audio_source = discord.PCMVolumeTransformer(raw_audio, volume=0.30) # Sets volume to 50%
+        audio_source = discord.PCMVolumeTransformer(raw_audio, volume=0.30) # Sets volume to 30%
         
         self.current_track[ctx.guild.id] = {
             'title': title,
@@ -190,38 +177,11 @@ class Music(commands.Cog):
         else:
             vc = ctx.voice_client
 
-        # Spotify Bait and Switch
-        if "spotify.com" in query:
-            try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(f"https://open.spotify.com/oembed?url={query}") as resp:
-                        if resp.status == 200:
-                            data = await resp.json()
-                            # Overwrite the URL with a YouTube search query for the top result
-                            title = data.get('title', 'Unknown Title')
-                            author = data.get('author_name', '')
-
-                            # Fallback if Spotify's Oembed API omits the author name
-                            if not author:
-                                async with session.get(query) as html_resp:
-                                    if html_resp.status == 200:
-                                        html = await html_resp.text()
-                                        match = re.search(r'<title>(.*?)</title>', html, re.IGNORECASE)
-                                        if match:
-                                            # Grabs e.g., "Song - song and lyrics by Artist | Spotify"
-                                            title = match.group(1).replace(" | Spotify", "")
-                                            
-                            query = f"ytsearch1:{title} {author} audio".strip()
-                        else:
-                            print(f"[Spotify Error] Status {resp.status} for {query}")
-                            return await ctx.respond("[❌] Could not extract track info from that Spotify link. The link may be private or invalid.")
-            except Exception as e:
-                print(f"[Spotify Error] An exception occurred: {e}")
-                return await ctx.respond(f"[❌] An error occurred while trying to process that Spotify link.")
-            
-        # Plain Text Search (No URL provided)
-        elif not query.startswith(('http://', 'https://')):
-            query = f"ytsearch1:{query}"
+        # Resolves Spotify links to a YouTube search query, or wraps plain text as one
+        try:
+            query = await resolve_query(query)
+        except SpotifyResolutionError as e:
+            return await ctx.respond(str(e))
 
         # Extract from Link
         with yt_dlp.YoutubeDL(YTDL_OPTIONS) as ydl:
@@ -258,7 +218,7 @@ class Music(commands.Cog):
 
         # Streaming
         raw_audio = discord.FFmpegPCMAudio(stream_url, **FFMPEG_OPTIONS)
-        audio_source = discord.PCMVolumeTransformer(raw_audio, volume=0.30) # Sets volume to 50%
+        audio_source = discord.PCMVolumeTransformer(raw_audio, volume=0.30) # Sets volume to 30%
         
         self.current_track[ctx.guild.id] = {
             'title': title,
