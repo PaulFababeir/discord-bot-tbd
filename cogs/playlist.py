@@ -86,7 +86,10 @@ class Playlist(commands.Cog):
     @option("query", str, description="Paste a link or type a song name to search", required=True)
     async def addsong(self, ctx: discord.ApplicationContext, playlist_id: int, query: str):
         await ctx.defer()
-        
+
+        if not await self._require_owner(ctx, playlist_id):
+            return
+
         # Resolves Spotify links to a YouTube search query, or wraps plain text as one
         try:
             query = await resolve_query(query)
