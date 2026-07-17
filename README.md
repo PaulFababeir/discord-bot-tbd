@@ -86,7 +86,7 @@ venv\Scripts\activate      # Windows
 source venv/bin/activate   # macOS/Linux
 
 # Install dependencies
-pip install py-cord python-dotenv supabase yt-dlp aiohttp
+pip install -r requirements.txt
 ```
 
 ### Configuration
