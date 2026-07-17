@@ -95,8 +95,10 @@ class Music(commands.Cog):
             if guild.me.voice:
                 await guild.me.edit(voice_channel=None)
 
-    def check_queue(self, ctx: discord.ApplicationContext):
+    def check_queue(self, ctx: discord.ApplicationContext, error=None):
         """Called automatically when a song finishes playing."""
+        if error:
+            print(f"[Playback Error] Guild {ctx.guild.id}: {error}")
         if ctx.guild.id in self.queues and len(self.queues[ctx.guild.id]) > 0:
             # Pop the next song from the queue
             next_song = self.queues[ctx.guild.id].pop(0)
@@ -147,11 +149,11 @@ class Music(commands.Cog):
         }
         
         # Pass check_queue back into 'after' to keep the loop going!
-        vc.play(audio_source, after=lambda e: self.check_queue(ctx))
-        
+        vc.play(audio_source, after=lambda e: self.check_queue(ctx, e))
+
         if video_id:
             asyncio.create_task(track_song_play(video_id, title))
-            
+
         view = MusicController(self, ctx)
         await ctx.send(embed=view.get_progress_embed(), view=view)
 
@@ -230,11 +232,11 @@ class Music(commands.Cog):
             'accumulated_time': 0
         }
     
-        vc.play(audio_source, after=lambda e: self.check_queue(ctx))
-        
+        vc.play(audio_source, after=lambda e: self.check_queue(ctx, e))
+
         if video_id:
             asyncio.create_task(track_song_play(video_id, title))
-            
+
         view = MusicController(self, ctx)
         await ctx.respond(embed=view.get_progress_embed(), view=view)
 
@@ -246,7 +248,7 @@ class Music(commands.Cog):
             
         queue_list = self.queues[ctx.guild.id]
         embeds = []
-        chunk_size = 10 # Display 5 songs per page
+        chunk_size = 10 # Display 10 songs per page
         
         for i in range(0, len(queue_list), chunk_size):
             chunk = queue_list[i:i+chunk_size]
@@ -279,13 +281,20 @@ class Music(commands.Cog):
     async def disconnect(self, ctx: discord.ApplicationContext):
         if ctx.voice_client:
             await ctx.voice_client.disconnect()
+            self._clear_guild_state(ctx.guild.id)
             await ctx.respond("[👋] Left the voice channel.")
         elif ctx.guild and ctx.guild.me.voice:
             # Handles the edge case where the bot lost its local voice state but is physically still in the VC
             await ctx.guild.me.edit(voice_channel=None)
+            self._clear_guild_state(ctx.guild.id)
             await ctx.respond("[👋] Left the voice channel.")
         else:
             await ctx.respond("[❌] I am not connected to any voice channel.")
+
+    def _clear_guild_state(self, guild_id: int):
+        """Drops the queue and now-playing info so a stale queue doesn't resume after a reconnect."""
+        self.queues.pop(guild_id, None)
+        self.current_track.pop(guild_id, None)
     
     # PAUSE COMMAND
     @slash_command(description="Pauses the currently playing track.")

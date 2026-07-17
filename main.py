@@ -30,4 +30,8 @@ for cog in cogs_list:
 async def on_ready():
     print(f"{bot.user} is ready and online!")
 
-bot.run(os.getenv('TOKEN')) # run the bot with the token
+token = os.getenv('TOKEN')
+if not token:
+    raise SystemExit("[ERROR] TOKEN is missing or empty in your .env file. Get one from https://discord.com/developers/applications")
+
+bot.run(token) # run the bot with the token

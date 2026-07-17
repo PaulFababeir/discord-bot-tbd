@@ -1,6 +1,7 @@
 """Shared helpers used by multiple cogs (music.py, playlist.py, leaderboard.py)."""
 import re
 import aiohttp
+from urllib.parse import urlparse
 
 # Configurations for yt-dlp to extract the stream link safely
 YTDL_OPTIONS = {
@@ -9,6 +10,7 @@ YTDL_OPTIONS = {
     'quiet': True,
     'no_warnings': True,
     'source_address': '0.0.0.0', # Forces IPv4 to prevent connection timeouts
+    'socket_timeout': 10, # A stalled connection would otherwise hang the extraction thread indefinitely
     # Restricts extraction to known music sources; blocks yt-dlp's generic
     # extractor from fetching arbitrary user-supplied URLs (SSRF risk)
     'allowed_extractors': ['youtube.*', 'soundcloud.*', 'bandcamp.*']
@@ -33,6 +35,19 @@ class SpotifyResolutionError(Exception):
     """Raised when a Spotify link can't be resolved to a playable query."""
 
 
+# Timeout for the Spotify oEmbed/HTML lookups so a hung connection can't stall a command forever
+_HTTP_TIMEOUT = aiohttp.ClientTimeout(total=10)
+
+
+def _is_spotify_url(query: str) -> bool:
+    """True only for real http(s) Spotify URLs — hostname check, not a substring
+    match, so e.g. https://evil.example/?ref=spotify.com is never fetched."""
+    if not query.startswith(('http://', 'https://')):
+        return False
+    host = urlparse(query).hostname or ''
+    return host == 'spotify.com' or host.endswith('.spotify.com')
+
+
 async def resolve_query(query: str) -> str:
     """Transforms a raw user query into something yt-dlp can search/extract from.
 
@@ -40,9 +55,9 @@ async def resolve_query(query: str) -> str:
     query, since yt-dlp can't stream directly from Spotify. Plain text
     (no URL) is turned into a YouTube search query.
     """
-    if "spotify.com" in query:
+    if _is_spotify_url(query):
         try:
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(timeout=_HTTP_TIMEOUT) as session:
                 async with session.get(f"https://open.spotify.com/oembed?url={query}") as resp:
                     if resp.status != 200:
                         print(f"[Spotify Error] Status {resp.status} for {query}")
