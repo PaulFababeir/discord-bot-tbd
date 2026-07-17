@@ -102,7 +102,21 @@ Leaving `GUILD_ID` unset makes slash commands sync globally instead of instantly
 
 ### Database
 
-Run [`database/schema.sql`](database/schema.sql) in your Supabase project's **SQL Editor** to create the three required tables (`playlist`, `songs`, `song_leaderboard`) with the correct types, primary keys, and foreign key.
+Run [`database/schema.sql`](database/schema.sql) in your Supabase project's **SQL Editor** to create the three required tables with the correct types, primary keys, and foreign key:
+
+| Table | Column | Type | Notes |
+|---|---|---|---|
+| `playlist` | `id` | `BIGINT` | Primary key |
+| | `playlist_name` | `VARCHAR` | |
+| | `owner_id` | `BIGINT` | Discord user snowflake |
+| `songs` | `song_id` | `BIGINT` | Primary key |
+| | `playlist_id` | `BIGINT` | References `playlist.id`; no cascade delete — `/deleteplaylist` requires the playlist to be emptied first |
+| | `song_link` | `VARCHAR` | |
+| | `song_title` | `TEXT` | |
+| `song_leaderboard` | `video_id` | `VARCHAR(15)` | Primary key |
+| | `title` | `TEXT` | |
+| | `play_count` | `INTEGER` | Defaults to `1` |
+| | `updated_at` | `TIMESTAMPTZ` | Defaults to `NOW()` |
 
 Note: Supabase free-tier projects auto-pause after a period of inactivity — if the bot's DB-backed commands (`/topsongs`, playlist commands) suddenly stop working, check your project's dashboard for a paused state before assuming it's a code issue.
 
