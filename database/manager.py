@@ -59,6 +59,15 @@ async def get_playlists(owner_id: int = None):
         print(f"[DB ERROR] Error fetching playlists: {e}")
         return None
 
+async def get_playlist(playlist_id: int):
+    """Fetches a single playlist by its ID, mainly used for ownership checks."""
+    try:
+        response = supabase.table("playlist").select("id, playlist_name, owner_id").eq("id", playlist_id).execute()
+        return response.data[0] if response.data else None
+    except Exception as e:
+        print(f"[DB ERROR] Error fetching playlist {playlist_id}: {e}")
+        return None
+
 async def add_song_to_playlist(playlist_id: int, song_link: str, song_title: str):
     """Adds a song to a playlist."""
     try:
@@ -70,6 +79,15 @@ async def add_song_to_playlist(playlist_id: int, song_link: str, song_title: str
         return response.data
     except Exception as e:
         print(f"[DB ERROR] Error adding song to playlist {playlist_id}: {e}")
+        return None
+
+async def get_song(song_id: int):
+    """Fetches a single song by its ID, mainly used to resolve its owning playlist."""
+    try:
+        response = supabase.table("songs").select("*").eq("song_id", song_id).execute()
+        return response.data[0] if response.data else None
+    except Exception as e:
+        print(f"[DB ERROR] Error fetching song {song_id}: {e}")
         return None
 
 async def remove_song_from_playlist(song_id: int):
