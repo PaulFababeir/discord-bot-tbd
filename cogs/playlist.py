@@ -3,21 +3,23 @@ from discord.commands import slash_command, option
 from discord.ext import commands, pages
 import yt_dlp
 import asyncio
-import aiohttp
-import re
-from database.manager import create_playlist, get_playlists, add_song_to_playlist, remove_song_from_playlist, get_songs_in_playlist, clear_playlist, delete_playlist
-
-YTDL_OPTIONS = {
-    'format': 'bestaudio/best',
-    'noplaylist': True,
-    'quiet': True,
-    'no_warnings': True,
-    'source_address': '0.0.0.0'
-}
+from database.manager import create_playlist, get_playlists, get_playlist, add_song_to_playlist, remove_song_from_playlist, get_songs_in_playlist, clear_playlist, delete_playlist, get_song
+from utils import YTDL_OPTIONS, resolve_query, SpotifyResolutionError
 
 class Playlist(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+
+    async def _require_owner(self, ctx: discord.ApplicationContext, playlist_id: int):
+        """Fetches a playlist and verifies the caller owns it. Responds and returns None on failure."""
+        playlist = await get_playlist(playlist_id)
+        if not playlist:
+            await ctx.respond(f"❌ Playlist **#{playlist_id}** does not exist.")
+            return None
+        if playlist.get("owner_id") != ctx.author.id:
+            await ctx.respond(f"❌ Only the owner of Playlist **#{playlist_id}** can do that.")
+            return None
+        return playlist
 
     # CREATE PLAYLIST
     @slash_command(name="createplaylist", description="Creates a new custom playlist.")
@@ -85,33 +87,11 @@ class Playlist(commands.Cog):
     async def addsong(self, ctx: discord.ApplicationContext, playlist_id: int, query: str):
         await ctx.defer()
         
-        # Spotify Bait and Switch
-        if "spotify.com" in query:
-            try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(f"https://open.spotify.com/oembed?url={query}") as resp:
-                        if resp.status == 200:
-                            data = await resp.json()
-                            title = data.get('title', 'Unknown Title')
-                            author = data.get('author_name', '')
-
-                            if not author:
-                                async with session.get(query) as html_resp:
-                                    if html_resp.status == 200:
-                                        html = await html_resp.text()
-                                        match = re.search(r'<title>(.*?)</title>', html, re.IGNORECASE)
-                                        if match:
-                                            title = match.group(1).replace(" | Spotify", "")
-                                            
-                            query = f"ytsearch1:{title} {author} audio".strip()
-                        else:
-                            return await ctx.respond("[❌] Could not extract track info from that Spotify link.")
-            except Exception as e:
-                print(f"[Spotify Error] An exception occurred: {e}")
-                return await ctx.respond(f"[❌] An error occurred while trying to process that Spotify link.")
-            
-        elif not query.startswith(('http://', 'https://')):
-            query = f"ytsearch1:{query}"
+        # Resolves Spotify links to a YouTube search query, or wraps plain text as one
+        try:
+            query = await resolve_query(query)
+        except SpotifyResolutionError as e:
+            return await ctx.respond(str(e))
 
         # Extract from Link
         with yt_dlp.YoutubeDL(YTDL_OPTIONS) as ydl:
@@ -141,10 +121,17 @@ class Playlist(commands.Cog):
     @option("song_id", int, description="The ID of the song to remove", required=True)
     async def removesong(self, ctx: discord.ApplicationContext, song_id: int):
         await ctx.defer()
-        
+
+        song = await get_song(song_id)
+        if not song:
+            return await ctx.respond(f"❌ Song **#{song_id}** does not exist.")
+
+        if not await self._require_owner(ctx, song.get("playlist_id")):
+            return
+
         # Delete the song from the database using its unique song_id
         data = await remove_song_from_playlist(song_id=song_id)
-        
+
         if data:
             await ctx.respond(f"✅ Successfully removed song **#{song_id}** from the playlist!")
         else:
@@ -155,7 +142,10 @@ class Playlist(commands.Cog):
     @option("playlist_id", int, description="The ID of the playlist to clear", required=True)
     async def clearplaylist(self, ctx: discord.ApplicationContext, playlist_id: int):
         await ctx.defer()
-        
+
+        if not await self._require_owner(ctx, playlist_id):
+            return
+
         songs = await get_songs_in_playlist(playlist_id=playlist_id)
         if songs is None:
             return await ctx.respond(f"❌ Failed to fetch songs for Playlist **#{playlist_id}**.")
@@ -175,7 +165,10 @@ class Playlist(commands.Cog):
     @option("playlist_id", int, description="The ID of the playlist to delete", required=True)
     async def deleteplaylist(self, ctx: discord.ApplicationContext, playlist_id: int):
         await ctx.defer()
-        
+
+        if not await self._require_owner(ctx, playlist_id):
+            return
+
         songs = await get_songs_in_playlist(playlist_id=playlist_id)
         if songs is None:
             return await ctx.respond(f"❌ Failed to check Playlist **#{playlist_id}**. Ensure it exists.")
